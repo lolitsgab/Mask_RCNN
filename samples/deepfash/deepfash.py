@@ -63,7 +63,7 @@ class BalloonConfig(Config):
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 1
+    IMAGES_PER_GPU = 4
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 13  # Background + DeepFashionClasses
@@ -86,6 +86,8 @@ class BalloonDataset(utils.Dataset):
         dataset_dir: Root directory of the dataset.
         subset: Subset to load: train or val
         """
+        start_range = 0
+        end_range = 1000
         # Train or validation dataset?
         assert subset in ["train", "val"]
         dataset_dir = os.path.join(dataset_dir, subset)
@@ -95,35 +97,42 @@ class BalloonDataset(utils.Dataset):
         # Load annotations
         # r=root, d=directories, f = files
         seen_classes = set()
+        print("starting at: {}".format(int(start_range))) 
+        print("ending at: {}".format(int(end_range))) 
         for r, d, f in os.walk(anno_dir):
-            for file in f:
-                if '.json' in file and file != 'settings.json':
-                    print("loading JSON " + file)
-                    curr = json.load(open(os.path.join(anno_dir, file)))
-                    print("loading JPG " + file)
-                    image_path = images_dir + file.replace('.json', '.jpg')
-                    image = skimage.io.imread(image_path)
-                    height, width = image.shape[:2]
-                    for i in range(1,20):
-                        if ('item' + str(i)) in curr:
-                            curr = curr['item' + str(i)]
-                            cat_name = curr['category_name']
-                            cat_id = curr['category_id']
-                            seg = curr['segmentation']
-                            poly.append(cat_id, seg)
-                            #check if we have seen this class before
-                            if category not in seen_classes:
-                                seen_classes.add(category)
-                                self.add_class('clothes', cat_id, cat_name)
-                        else:
-                            break 
-                    #add image to our training dataset
-                    self.add_image(
-                        'shapes',
-                        image_id=file,  # use file name as a unique image id
-                        path=image_path,
-                        width=width, height=height,
-                        polygons=poly)
+            for file in f[int(start_range):int(end_range)]:
+                try:
+                    poly = []
+                    if '.json' in file and file != 'settings.json':
+                        # print("loading JSON " + file)
+                        curr = json.load(open(os.path.join(anno_dir, file)))
+                        file_jpg = file.replace('.json', '.jpg')
+                        # print("loading JPG " + file_jpg)
+                        image_path = images_dir + file_jpg
+                        image = skimage.io.imread(image_path)
+                        height, width = image.shape[:2]
+                        for i in range(1,20):
+                            if ('item' + str(i)) in curr:
+                                curr = curr['item' + str(i)]
+                                cat_name = curr['category_name']
+                                cat_id = curr['category_id']
+                                seg = curr['segmentation']
+                                poly.append((cat_id, seg))
+                                #check if we have seen this class before
+                                if cat_name not in seen_classes:
+                                    seen_classes.add(cat_name)
+                                    self.add_class('clothes', cat_id, cat_name)
+                            else:
+                                break 
+                        #add image to our training dataset
+                        self.add_image(
+                            'clothes',
+                            image_id=file,  # use file name as a unique image id
+                            path=image_path,
+                            width=width, height=height,
+                            polygons=poly)
+                except:
+                    continue
 
 
         # The VIA tool saves images in the JSON even if they don't have any
@@ -146,20 +155,27 @@ class BalloonDataset(utils.Dataset):
         # [height, width, instance_count]
         info = self.image_info[image_id]
         polygons = info["polygons"]
-        mask = np.zeros([info["height"], info["width"], len(polygons)],
+        instances = 0
+        for instance in polygons:
+            instances += len(instance[1])
+        mask = np.zeros([info["height"], info["width"], instances],
                         dtype=np.uint8)
         class_ids = []
         for i,p in enumerate(polygons):
-            for class_id, poly in p:
+            for poly in p[1]:
                 it = iter(poly)
-                class_ids.append(class_id)
+                class_ids.append(p[0])
+                x_coords = []
+                y_coords = []
                 for x,y in zip(it,it):
-                    rr, cc = skimage.draw.polygon(y,x)
-                    mask[rr, cc, i] = 1
+                    x_coords.append(x-1)
+                    y_coords.append(y-1)
+                rr, cc = skimage.draw.polygon(y_coords,x_coords)
+                mask[rr, cc, i] = 1
 
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID only, we return an array of 1s
-        return mask.astype(np.bool), class_ids
+        return mask.astype(np.bool), np.asarray(class_ids)
 
     def image_reference(self, image_id):
         """Return the path of the image."""
