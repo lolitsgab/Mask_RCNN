@@ -63,7 +63,7 @@ class BalloonConfig(Config):
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 13  # Background + DeepFashionClasses
@@ -89,7 +89,7 @@ class BalloonDataset(utils.Dataset):
         # Train or validation dataset?
         assert subset in ["train", "val"]
         dataset_dir = os.path.join(dataset_dir, subset)
-        anno_dir = dataset_dir + "/anno/"
+        anno_dir = dataset_dir + "/annos/"
         images_dir = dataset_dir + "/image/"
 
         # Load annotations
