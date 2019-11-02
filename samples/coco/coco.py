@@ -111,7 +111,7 @@ class CocoDataset(utils.Dataset):
         coco = COCO(dataset_dir)
 #         if subset == "minival" or subset == "valminusminival":
 #             subset = "val"
-        image_dir = "/content/val/"
+        image_dir = "/root/val/"
 
         # Load all classes or a subset?
         if not class_ids:
